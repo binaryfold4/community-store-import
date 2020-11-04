@@ -67,10 +67,38 @@ div.col-md-6 {
     </div>
 </form>
 
+<div>
+    <h3>Queue</h3>
+    <p id="queue_length"></p>
+</div>
 <script>
 $(document).ready(function() {
     $('#import').click(function() {
         return confirm('<?php echo t("Be sure you backup your database before continuing. Are you sure you want to continue?"); ?>');
     });
+
+    var processQueue = function(){
+        $.ajax({
+            url: '<?php echo $view->action('process'); ?>',
+            success: function(data){
+                var timeOut;
+
+                var queueLength = data.count;
+
+                $('#queue_length').text(queueLength);
+
+                if(queueLength){
+                    timeOut = 500;
+                }
+                else{
+                    timeOut = 30000;
+                }
+
+                setTimeout(processQueue, timeOut);
+            }
+        });
+    }
+    processQueue();
+
 });
 </script>
