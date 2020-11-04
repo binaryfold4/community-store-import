@@ -37,7 +37,7 @@ use \Concrete\Core\Attribute\ObjectTrait;
  * @ORM\Entity
  * @ORM\Table(name="CommunityStoreImportSessions")
  */
-class Session
+class Operation
 {
     use ObjectTrait;
     /**
