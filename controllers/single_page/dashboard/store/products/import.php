@@ -122,7 +122,7 @@ class Import extends DashboardPageController
         $q = Queue::get('community_store_import', array('timeout' => 10));
         if($q->count()){
 
-            $messages = $q->receive(10);
+            $messages = $q->receive(20);
             foreach($messages as $message){
                 /**
                  * @var $message Message
@@ -134,8 +134,11 @@ class Import extends DashboardPageController
             }
         }
 
+$stats = $w->getStats();
+$stats['count'] = $q->count();
+
         $r = new JsonResponse();
-        $r->setData(['count'=>$q->count()]);
+        $r->setData($stats);
 
         return $r;
     }

@@ -2,11 +2,14 @@
 namespace Concrete\Package\CommunityStoreImport\Src\CommunityStoreImport\Import;
 
 use Concrete\Core\Support\Facade\Facade;
+use Concrete\Core\Support\Facade\Log;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Group\Group as StoreGroup;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product;
 use Doctrine\ORM\Mapping as ORM;
 use Concrete\Core\Support\Facade\Config;
 use Concrete\Core\Support\Facade\Events;
+use Doctrine\ORM\Repository\RepositoryFactory;
+use Ercol\Entity\ErcolProduct;
 use Job as AbstractJob;
 use Queue;
 use ZendQueue\Message as ZendQueueMessage;
@@ -41,6 +44,11 @@ class Worker
     protected $aks;
     protected $app;
     protected $attributes;
+    protected $processed = 0;
+    protected $added = 0;
+    protected $updated = 0;
+    protected $em = false;
+    protected $repositories = [];
 
     public function __construct(){
         $this->app = Facade::getFacadeApplication();
@@ -48,6 +56,14 @@ class Worker
             $productCategory = $this->app->make('Concrete\Package\CommunityStore\Attribute\Category\ProductCategory');
             $this->aks = $productCategory->getList();
         }
+    }
+
+    public function getStats(){
+        return [
+            'processed' => $this->processed,
+            'added' => $this->added,
+            'updated' => $this->updated,
+        ];
     }
 
     public function processRow($row){
@@ -60,13 +76,67 @@ class Worker
 
         $p = Product::getBySKU($row['psku']);
 
+        $this->processed++;
         if ($p instanceof Product) {
             $this->update($p, $row);
+            $this->updated++;
         } else {
             $p = $this->add($row);
+            $this->added++;
         }
 
+        Log::addEntry('Syncing product ['.$p->getSKU().']');
+        $this->createOrUpdateProduct($p);
+
         return $p;
+    }
+
+    protected function getRespository($class)
+    {
+        if(!$this->em) {
+            $this->em = dbORM::entityManager();
+        }
+
+        if($repository = $this->repositories[$class]){
+            return $repository;
+        }
+        else{
+            if($repository = $this->em->getRepository($class)) {
+                $this->repositories[$class] = $repository;
+            }
+        }
+
+        return  $repository;
+    }
+
+    protected function createOrUpdateProduct(Product $p){
+
+        $productCode = $p->getSKU();
+        $parts = explode('-', $productCode, 2);
+        $skuPrefixWithLeadingZeroes = $parts[0];
+        $skuPrefix = explode('/', $skuPrefixWithLeadingZeroes, 2)[1];
+
+        Log::addEntry('Looking for Product with Code ['.$skuPrefix.']');
+        $class = ErcolProduct::class;
+        /**
+         * @var $repository RepositoryFactory
+         */
+        $productRepository = $this->getRespository($class);
+
+        $product = $productRepository->findOneBy(['code' => $skuPrefix]);
+        if(!$product){
+            Log::addEntry('Creating new Product with code ['.$skuPrefix.']');
+            $product = new ErcolProduct();
+        }
+
+        if($product) {
+            $product->setCode($skuPrefix);
+            $product->setName($p->getName());
+
+            $range = $this->getRange();
+
+            $this->em->persist($product);
+        }
     }
 
     private function setAttributes($product, $row)
@@ -87,17 +157,24 @@ class Worker
     }
 
     private function setGroups($product, $row) {
+        /**
+         * @var $product Product
+         */
         if ($row['pproductgroups']) {
             $pGroupNames = explode(',', $row['pproductgroups']);
             $pGroupIDs = array();
             foreach ($pGroupNames as $pGroupName) {
-                $pgID = StoreGroup::getByName($pGroupName);
-                if (!$pgID instanceof StoreGroup) {
-                    $pgID = StoreGroup::add($pGroupName);
+                $pg = StoreGroup::getByName($pGroupName);
+                if (!$pg instanceof StoreGroup) {
+                    $pg = StoreGroup::add($pGroupName);
                 }
-                $pGroupIDs[] = $pgID;
+                if($pg) {
+                    $pGroupIDs[] = $pg->getID();
+                }
             }
-            $data['pProductGroups'] = $pGroupIDs;
+            $data['pProductGroups'] = array_filter(array_unique($pGroupIDs));
+
+            Log::addInfo('Adding groups ['.implode(',', $data['pProductGroups']).'] to product ['.$product->getSKU().']');
 
             // Update groups
             ProductGroup::addGroupsForProduct($data, $product);
@@ -148,7 +225,7 @@ class Worker
             'pMaxQty' => (isset($row['pmaxqty']) ? $row['pmaxqty'] : 0),
 
             // Not supported in CSV data
-            'pfID' => Config::get('community_store_import.default_image'),
+            'pfID' => intval(Config::get('community_store_import.default_image')),
             'pVariations' => false,
             'pQuantityPrice' => false,
             'pTaxClass' => 1        // 1 = default tax class
@@ -204,7 +281,7 @@ class Worker
         if ($row['ppackagedata']) $p->setPackageData($row['ppackagedata']);
 
         if (!$p->getImageId())
-            $p->setImageId(Config::get('community_store_import.default_image'));
+            $p->setImageId(intval(Config::get('community_store_import.default_image')));
 
         // Product attributes
         $this->setAttributes($p, $row);
@@ -212,6 +289,9 @@ class Worker
         // Product groups
         $this->setGroups($p, $row);
 
+        /**
+         * @var $p Product
+         */
         $p = $p->save();
 
         return $p;
