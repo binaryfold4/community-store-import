@@ -7,6 +7,7 @@ use Concrete\Core\Page\Controller\DashboardPageController;
 use Concrete\Core\Package\Package as Package;
 use Concrete\Core\File\File;
 use Concrete\Core\Support\Facade\Facade;
+use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductList;
 use Concrete\Package\CommunityStoreImport\Src\CommunityStoreImport\Import\Worker;
 use Log;
 use Exception;
@@ -26,6 +27,8 @@ class Import extends DashboardPageController
     {
         $this->loadFormAssets();
         $this->set('pageTitle', t('Product Import'));
+
+        $this->removeInactiveProducts();
     }
 
     public function loadFormAssets()
@@ -38,9 +41,33 @@ class Import extends DashboardPageController
         $this->set('form', Core::make('helper/form'));
     }
 
+    protected function removeInactiveProducts(){
+        $spl = new ProductList();
+        $spl->setActiveOnly(false);
+
+        $spl->filter('pActive', 0, '=');
+        $inactiveProductIDS = $spl->getResultIDs();
+
+        /**
+         * @var $q \ZendQueue\Queue
+         */
+        $q = Queue::get('community_store_import', array('timeout' => 60));
+        if(!$q->count()){
+            foreach($inactiveProductIDS as $inactiveProductID){
+                $message = [
+                    'action' => 'remove',
+                    'data' => ['id' => $inactiveProductID]
+                ];
+
+                $q->send(json_encode($message));
+            }
+        }
+    }
     public function run()
     {
         $this->saveSettings();
+
+        $this->removeInActiveProducts();
 
         $MAX_TIME = Config::get('community_store_import.max_execution_time');
         $MAX_EXECUTION_TIME = ini_get('max_execution_time');
@@ -70,7 +97,113 @@ class Import extends DashboardPageController
 
         // Get headings
         $csv = fgetcsv($handle, $line_length, $delim, $enclosure);
-        $headings = array_map('strtolower', $csv);
+        $headings = array_map('trim', $csv);
+
+        $headingsMap = [
+            'CatNo.' => 'attr_product_code',
+            'ModelNo.' => 'ModelNo.',
+            'Description' => 'pName',
+            'Range' => 'attr_product_range',
+            'Fabric' => 'attr_product_body_fabric',
+            'Fabric Grade' => 'Fabric Grade',
+            'Finish' => 'attr_product_finish',
+            'RRP' => 'pPrice',
+            'LeadTime (Days)' => 'attr_lead_time_days',
+            'Product Sku' => 'pSKU',
+            'Product On Winman?' => 'Product On Winman?',
+            'Scatter Prefix if Applicable' =>  '',
+            'Product Id' => '',
+            'Product Description' => '',
+            'DC 001 TXT' => '',
+            'DC 002 TXT' => '',
+            'DC 004 TXT' => '',
+            'Boxed Length' => 'attr_product_boxed_length',
+            'Boxed Height' => 'attr_product_boxed_height',
+            'Boxed Width' => 'attr_product_boxed_width',
+            'Boxed Weight' => 'attr_product_boxed_weight',
+            'Pack Size' => '',
+            'Dimension Quantity' => '',
+            'Location' => '',
+//            'Finish' => '',
+//            'Fabric' => '',
+            'Sku for Cubes' => '',
+            'Part number' => '',
+            'Old_design no' => '',
+            'Description_' => '',
+            'Second Description' => '',
+            'Status' => '',
+            'Factory Location' => '',
+            'LENGTH' => '',
+            'WIDTH' => '',
+            'HEIGHT' => '',
+            'KG' => '',
+            'CUBE Mtr' => '',
+            'CUBE Ft' => '',
+            'Sac' => '',
+            'Collection Description Copy' => 'attr_product_collection_description',
+            'Marketing / Designer Product Copy' => '',
+            'exclusive_to' => '',
+            'exclusive_url' => '',
+            'Technical Descripton' => 'attr_product_collection_description',
+            'Timber' => 'attr_product_timber',
+            'Fabric Collection' => '',
+            'Designed by' => '',
+            'Country of Origin' => '',
+            'dim_width' => 'attr_product_width',
+            'dim_min_width' => 'attr_product_min_width',
+            'dim_max_width' => 'attr_product_max_width',
+            'dim_depth' => 'attr_product_depth',
+            'dim_min_depth' => 'attr_product_min_depth',
+            'dim_max_depth' => 'attr_product_max_depth',
+            'dim_height' => 'attr_product_height',
+            'dim_min_height' => 'attr_product_min_height',
+            'dim_max_height' => 'attr_product_max_height',
+            'dim_seat_height' => 'attr_product_seat_height',
+            'dim_seat_depth' => 'attr_product_seat_depth',
+            'dim_seat_width (arm to arm)' => 'attr_product_seat_width_arm_to_arm',
+            'dim_diameter' => 'attr_product_diameter',
+            'dim_clearance_under' => 'attr_product_clearance_under',
+            'dim_arm_height' => 'attr_product_arm_height',
+            'dim_table_leg_gap' => 'attr_product_table_leg_gap',
+            'Measurements between shelves' => 'attr_product_measurement_between_shelves',
+            'unpacked_weight_kg' => 'attr_product_unpacked_weight',
+            'seat_interior' => 'attr_product_seat_interior',
+            'back_interior' => 'attr_product_back_interior',
+            'scatter_interior' => 'attr_product_scatter_interior',
+            'Reversible Cushions' => '',
+            'Reclines' => '',
+            'Max Loading Weight' => '',
+            'assembly' => '',
+            'Timber & Construction' => 'attr_product_construction',
+            'Care Instructions' => '',
+            'Additional Information' => '',
+            'Product Sheet Download' => '',
+            'Assembly Instructions Download Link' => 'attr_product_assembly_instructions_link',
+//            'Status' => '',
+//            'Product Sku' => '',
+            'gg' => ''
+        ];
+
+        $headingsRewrite = array_map(function($heading)use($headingsMap){
+            if(isset($headingsMap[$heading])){
+                $heading = trim($headingsMap[$heading]);
+            }
+            return $heading;
+        }, $headings);
+
+        $headingsRewrite = array_map('strtolower', $headingsRewrite);
+        $defaults = [
+            'pqty' => 0,
+            'pqtyunlim' => 1,
+            'pnoqty' => 0,
+            'ptaxable' => 1,
+            'pactive' => 1,
+            'pshippable' => 1,
+            'pcreateuseraccount' => 0,
+            'pautocheckout' => 0,
+            'pexclusive' => 0,
+            'pallowdecimalqty' => 0
+        ];
 
         if ($this->isValid($headings)) {
             $this->error->add(t("Required data missing."));
@@ -83,7 +216,7 @@ class Import extends DashboardPageController
         /**
          * @var $q \ZendQueue\Queue
          */
-        $q = Queue::get('community_store_import', array('timeout' => 10));
+        $q = Queue::get('community_store_import', array('timeout' => 60));
 
         while (($csv = fgetcsv($handle, $line_length, $delim, $enclosure)) !== FALSE) {
             if (count($csv) === 1) {
@@ -91,9 +224,15 @@ class Import extends DashboardPageController
             }
 
             // Make associative arrray
-            $row = array_combine($headings, $csv);
+            $row = array_combine($headingsRewrite, $csv);
+            $row = array_merge($defaults, $row);
 
-            if($q->send(json_encode($row))){
+            $message = [
+                'action' => 'sync',
+                'data' => $row
+            ];
+
+            if($q->send(json_encode($message))){
                 $addedToQueue++;
             }
             else{
@@ -114,6 +253,8 @@ class Import extends DashboardPageController
 
     public function process()
     {
+        session_write_close();
+
         $w = new Worker();
 
         /**
@@ -134,8 +275,8 @@ class Import extends DashboardPageController
             }
         }
 
-$stats = $w->getStats();
-$stats['count'] = $q->count();
+        $stats = $w->getStats();
+        $stats['count'] = $q->count();
 
         $r = new JsonResponse();
         $r->setData($stats);
