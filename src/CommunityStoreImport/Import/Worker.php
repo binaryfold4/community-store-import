@@ -90,11 +90,16 @@ class Worker
         switch($action){
             case 'remove':
                 $this->removeProduct($data);
-                return true;
                 break;
             default:
-                return $this->syncProduct($data);
+                $this->syncProduct($data);
         }
+
+        $logs = $this->rowLog;
+        arsort($logs);
+        Log::addEntry(json_encode($logs));
+
+        return true;
     }
 
     protected function removeProduct($data)
@@ -115,7 +120,10 @@ class Worker
             }
         }
 
+        $start = microtime(true);
         $p = Product::getBySKU($row['psku']);
+
+        $this->rowLog['Get product'] = (microtime(true)-$start);
 
         $this->processed++;
         if ($p instanceof Product) {
@@ -126,7 +134,6 @@ class Worker
             $this->added++;
         }
 
-        Log::addEntry('Syncing product ['.$p->getSKU().']');
         $this->createOrUpdateProduct($p);
 
         return $p;
@@ -157,7 +164,8 @@ class Worker
 
         $rangeName = $parts[0];
 
-        Log::addEntry('Looking for Range with Name [' . $rangeName . ']');
+        $start = microtime(true);
+
         $class = ErcolRange::class;
         /**
          * @var $repository RepositoryFactory
@@ -166,12 +174,12 @@ class Worker
 
         $range = $rangeRepository->findOneBy(['name' => $rangeName]);
         if (!$range) {
-            Log::addEntry('Creating new Range with Name [' . $rangeName . ']');
             $range = new ErcolRange();
             $range->setName($rangeName);
             $this->em->persist($range);
         }
 
+        $this->rowLog['Get Range'] = (microtime(true)-$start);
         if ($range) {
             return $range;
         }
@@ -186,18 +194,20 @@ class Worker
 
         $p->setAttribute('product_code', $skuPrefix);
 
-        Log::addEntry('Looking for Product with Code ['.$skuPrefix.']');
         $class = ErcolProduct::class;
         /**
          * @var $repository RepositoryFactory
          */
         $productRepository = $this->getRespository($class);
 
+        $start = microtime(true);
         $product = $productRepository->findOneBy(['code' => $skuPrefix]);
         if(!$product){
             Log::addEntry('Creating new Product with code ['.$skuPrefix.']');
             $product = new ErcolProduct();
         }
+
+        $this->rowLog['Find Product by code'] =  (microtime(true)-$start);
 
         if($product) {
             $product->setCode($skuPrefix);
@@ -207,8 +217,12 @@ class Worker
                 $product->setRanges([$range]);
             }
 
+            $start = microtime(true);
             $this->createOrUpdateMaterial($p);
+            $this->rowLog['CreateOrUpdateMaterial'] = (microtime(true)-$start);
+            $start = microtime(true);
             $this->createOrUpdateImage($p);
+            $this->rowLog['CreateOrUpdateImage'] = (microtime(true)-$start);
 
             $this->em->persist($product);
         }
@@ -346,29 +360,36 @@ class Worker
         $oldImageSet = $this->getImageSet('Material Swatches');
         $image = $p->getImageObj();
         if($image){
+            $start  = microtime(true);
             $imageSet->addFileToSet($image);
             $v = $image->getVersion();
             if($v->getAttribute('source_url')!== $imageURL)
             {
-
+                $v->setAttribute('source_url', $imageURL);
             }
             if($oldImageSet){
                 $oldImageSet->removeFileFromSet($image);
             }
+
+            $this->rowLog['CreateOrUpdateImage: UpdateExisting'] = (microtime(true)-$start);
             return;
         }
 
         $imageTitle = $p->getSKU().'.jpg';
+
+        $start = microtime(true);
 
         // Search for image by fileName (and set)
         $fl = new FileList();
         $fl->getQueryObject()->expr()->eq('fv.fvTitle', $imageTitle);
         $fl->filterBySet($imageSet);
         $fileResults = $fl->getResults();
+        $this->rowLog['CreateOrUpdateImage:Find by fvTitle'] = (microtime(true)-$start);
         if(count($fileResults)){
             /**
              * @var $file \Concrete\Core\Entity\File\File
              */
+            $file =$fileResults[0];
             $v = $file->getVersion();
             if($v->getAttribute('source_url') != $imageURL){
                 $v->setAttribute('source_url', $imageURL);
@@ -381,15 +402,19 @@ class Worker
         $groupID = $pg->getID();
         $pGroupIDs = $p->getGroupIDs();
 
-        Log::addEntry('Fetching '.$imageURL);
+        $start = microtime(true);
         $fileName = $this->getFile($imageURL);
+        $this->rowLog['CreateOrUpdateImage:getFile'] = microtime(true)-$start;
         if($fileName){
             Log::addEntry('Got file, length ['.filesize($fileName).']');
             $app = Application::getFacadeApplication();
             $importer = $app->make(\Concrete\Core\File\Import\FileImporter::class);
             Log::addEntry(get_class($importer));
 
+            $start = microtime(true);
             $file = $importer->importLocalFile($fileName, $p->getSKU().'.jpg');
+            $this->rowLog['CreateOrUpdateImage:importLocalFile'] = (microtime(true)-$start);
+
             $imageSet->addFileToSet($file);
             unlink($fileName);
             $p->setImageID($file->getFileID());
@@ -412,11 +437,15 @@ class Worker
         }
     }
 
-    private function setAttributes($product, $row)
+    private function setAttributes(Product $product, $row)
     {
         if($this->aks){
             foreach ($this->aks as $ak) {
-                $product->setAttribute($ak, $row['attr_'.$ak->getAttributeKeyHandle()]);
+                $start = microtime(true);
+                $akHandle = $ak->getAttributeKeyHandle();
+                $this->rowLog['GetAttributeHandle:'.$akHandle] = (microtime(true)-$start);
+                $product->setAttribute($ak, $row['attr_'.$akHandle]);
+                $this->rowLog['SetAttributes:'.$akHandle] = (microtime(true)-$start);
             }
         }
         else {
@@ -446,8 +475,6 @@ class Worker
                 }
             }
             $data['pProductGroups'] = array_filter(array_unique($pGroupIDs));
-
-            Log::addInfo('Adding groups ['.implode(',', $data['pProductGroups']).'] to product ['.$product->getSKU().']');
 
             // Update groups
             ProductGroup::addGroupsForProduct($data, $product);
@@ -560,16 +587,22 @@ class Worker
         if (!$p->getImageId())
             $p->setImageId(intval(Config::get('community_store_import.default_image')));
 
+        $start = microtime(true);
         // Product attributes
         $this->setAttributes($p, $row);
+        $this->rowLog['Update Attributes'] = (microtime(true)-$start);
 
+        $start = microtime(true);
         // Product groups
         $this->setGroups($p, $row);
 
+        $this->rowLog['Set groups'] = (microtime(true)-$start);
         /**
          * @var $p Product
          */
+        $start = microtime(true);
         $p = $p->save();
+        $this->rowLog['Save storeproduct'] = (microtime(true)-$start);
 
         return $p;
     }

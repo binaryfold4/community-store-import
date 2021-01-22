@@ -28,7 +28,7 @@ class Import extends DashboardPageController
         $this->loadFormAssets();
         $this->set('pageTitle', t('Product Import'));
 
-        $this->removeInactiveProducts();
+//        $this->removeInactiveProducts();
     }
 
     public function loadFormAssets()
@@ -72,6 +72,8 @@ class Import extends DashboardPageController
         $MAX_TIME = Config::get('community_store_import.max_execution_time');
         $MAX_EXECUTION_TIME = ini_get('max_execution_time');
         $MAX_INPUT_TIME = ini_get('max_input_time');
+        $MAX_ROWS = Config::get('community_store_import.max_rows');
+
         ini_set('max_execution_time', $MAX_TIME);
         ini_set('max_input_time', $MAX_TIME);
         ini_set('auto_detect_line_endings', TRUE);
@@ -223,6 +225,11 @@ class Import extends DashboardPageController
                 continue;
             }
 
+            if($MAX_ROWS){
+                if($MAX_ROWS == $total){
+                    break;
+                }
+            }
             // Make associative arrray
             $row = array_combine($headingsRewrite, $csv);
             $row = array_merge($defaults, $row);
@@ -293,6 +300,7 @@ class Import extends DashboardPageController
         Config::save('community_store_import.import_file', $data['import_file']);
         Config::save('community_store_import.default_image', $data['default_image']);
         Config::save('community_store_import.max_execution_time', $data['max_execution_time']);
+        Config::save('community_store_import.max_rows', $data['max_rows']);
         Config::save('community_store_import.csv.delimiter', $data['delimiter']);
         Config::save('community_store_import.csv.enclosure', $data['enclosure']);
         Config::save('community_store_import.csv.line_length', $data['line_length']);

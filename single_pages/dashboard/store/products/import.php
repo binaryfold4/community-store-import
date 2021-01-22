@@ -58,6 +58,13 @@ div.col-md-6 {
                 <div class="help-block"><?php echo t('Product import can take some time. Enter the number of seconds to allow the import to run. 1 second per product should be sufficient.') ?></div>
             </div>
         </div>
+        <div class="form-group">
+            <div class="col-md-6">
+                <label class="control-label"><?php echo t('Max Rows') ?></label>
+                <?php echo $form->number('max_rows', Config::get('community_store_import.max_rows')) ?>
+                <div class="help-block"><?php echo t('Only process the first X number of rows of the import file') ?></div>
+            </div>
+        </div>
     </fieldset>
 
     <div class="ccm-dashboard-form-actions-wrapper">
