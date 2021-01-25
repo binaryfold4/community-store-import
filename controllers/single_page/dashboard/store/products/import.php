@@ -220,6 +220,11 @@ class Import extends DashboardPageController
          */
         $q = Queue::get('community_store_import', array('timeout' => 60));
 
+        // Space our rows apart
+        for($waste=0; $waste<9000; $waste++){
+            fgetcsv($handle, $line_length, $delim, $enclosure);
+        }
+
         while (($csv = fgetcsv($handle, $line_length, $delim, $enclosure)) !== FALSE) {
             if (count($csv) === 1) {
                 continue;
@@ -262,28 +267,31 @@ class Import extends DashboardPageController
     {
         session_write_close();
 
-        $w = new Worker();
 
         /**
          * @var $q \ZendQueue\Queue
          */
         $q = Queue::get('community_store_import', array('timeout' => 10));
         if($q->count()){
-
-            $messages = $q->receive(20);
-            foreach($messages as $message){
-                /**
-                 * @var $message Message
-                 */
-                $data = json_decode($message->body, JSON_OBJECT_AS_ARRAY);
-                if($w->processRow($data)){
-                    $q->deleteMessage($message);
+            for($i = 0; $i<1; $i++){
+                $messages = $q->receive(1);
+                foreach($messages as $message){
+                    /**
+                     * @var $message Message
+                     */
+                    $w = new Worker();
+                    $data = json_decode($message->body, JSON_OBJECT_AS_ARRAY);
+                    if($w->processRow($data)){
+                        $q->deleteMessage($message);
+                    }
                 }
             }
         }
 
-        $stats = $w->getStats();
-        $stats['count'] = $q->count();
+        if($w){
+            $stats = $w->getStats();
+            $stats['count'] = $q->count();
+        }
 
         $r = new JsonResponse();
         $r->setData($stats);

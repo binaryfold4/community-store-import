@@ -87,6 +87,7 @@ class Worker
         $action = $row['action'];
         $data = $row['data'];
 
+        $start = microtime(true);
         switch($action){
             case 'remove':
                 $this->removeProduct($data);
@@ -97,8 +98,10 @@ class Worker
 
         $logs = $this->rowLog;
         arsort($logs);
-        Log::addEntry(json_encode($logs));
+        $time = microtime(true)-$start;
+//        Log::addEntry(json_encode($logs));
 
+        Log::addEntry($time.': Sync product ['.$data['psku'].']');
         return true;
     }
 
@@ -135,6 +138,7 @@ class Worker
         }
 
         $this->createOrUpdateProduct($p);
+        Log::addEntry('Flushes: '.$p->flushed);
 
         return $p;
     }
@@ -203,7 +207,7 @@ class Worker
         $start = microtime(true);
         $product = $productRepository->findOneBy(['code' => $skuPrefix]);
         if(!$product){
-            Log::addEntry('Creating new Product with code ['.$skuPrefix.']');
+//            Log::addEntry('Creating new Product with code ['.$skuPrefix.']');
             $product = new ErcolProduct();
         }
 
@@ -226,12 +230,16 @@ class Worker
 
             $this->em->persist($product);
         }
+        $start = microtime(true);
+        $this->em->flush();
+        Log::addEntry((microtime(true)-$start).' : createUpdate:flush');
+
     }
 
     protected function getMaterialType($name)
     {
 
-        Log::addEntry('Looking for MatType with Name [' . $name . ']');
+//        Log::addEntry('Looking for MatType with Name [' . $name . ']');
         $class = MaterialType::class;
         /**
          * @var $repository RepositoryFactory
@@ -240,7 +248,7 @@ class Worker
 
         $type = $repository->findOneBy(['name' => $name]);
         if (!$type) {
-            Log::addEntry('Creating new matType with Name [' . $name . ']');
+//            Log::addEntry('Creating new matType with Name [' . $name . ']');
             $type = new MaterialType();
             $type->setName($name);
             $this->em->persist($type);
@@ -266,7 +274,7 @@ class Worker
 
             $materialType = $this->getMaterialType($type);
 
-            Log::addEntry('Looking for Material with Code [' . $code . ']');
+//            Log::addEntry('Looking for Material with Code [' . $code . ']');
             $class = Material::class;
             /**
              * @var $repository RepositoryFactory
@@ -275,7 +283,7 @@ class Worker
 
             $material = $repository->findOneBy(['code' => $code]);
             if (!$material) {
-                Log::addEntry('Creating new Material with code [' . $code . ']');
+//                Log::addEntry('Creating new Material with code [' . $code . ']');
                 $material = new Material();
             }
 
@@ -315,7 +323,7 @@ class Worker
                 }
             }
             else{
-                Log::addEntry('Download failed ['.$response->getStatusCode().']');
+//                Log::addEntry('Download failed ['.$response->getStatusCode().']');
             }
         } catch (\Exception $x) {
             $update = null;
@@ -381,8 +389,11 @@ class Worker
 
         // Search for image by fileName (and set)
         $fl = new FileList();
-        $fl->getQueryObject()->expr()->eq('fv.fvTitle', $imageTitle);
+        $where = $fl->getQueryObject()->expr()->eq('fv.fvTitle', ':imageTitle');
         $fl->filterBySet($imageSet);
+        $queryObj = $fl->getQueryObject();
+        $queryObj->andWhere($where);
+        $queryObj->setParameter('imageTitle', $imageTitle);
         $fileResults = $fl->getResults();
         $this->rowLog['CreateOrUpdateImage:Find by fvTitle'] = (microtime(true)-$start);
         if(count($fileResults)){
@@ -406,10 +417,10 @@ class Worker
         $fileName = $this->getFile($imageURL);
         $this->rowLog['CreateOrUpdateImage:getFile'] = microtime(true)-$start;
         if($fileName){
-            Log::addEntry('Got file, length ['.filesize($fileName).']');
+//            Log::addEntry('Got file, length ['.filesize($fileName).']');
             $app = Application::getFacadeApplication();
             $importer = $app->make(\Concrete\Core\File\Import\FileImporter::class);
-            Log::addEntry(get_class($importer));
+//            Log::addEntry(get_class($importer));
 
             $start = microtime(true);
             $file = $importer->importLocalFile($fileName, $p->getSKU().'.jpg');
