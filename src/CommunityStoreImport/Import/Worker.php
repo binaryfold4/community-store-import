@@ -8,11 +8,17 @@ use Concrete\Core\File\Service\File;
 use Concrete\Core\File\Set\Set;
 use Concrete\Core\Http\Client\Client;
 use Concrete\Core\Http\HttpServiceProvider;
+use Concrete\Core\Page\Page;
+use Concrete\Core\Page\PageList;
+use Concrete\Core\Page\Template;
+use Concrete\Core\Page\Type\Type;
 use Concrete\Core\Support\Facade\Facade;
 use Concrete\Core\Support\Facade\Log;
 use Concrete\Core\Updater\RemoteApplicationUpdateFactory;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Group\Group as StoreGroup;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\Product;
+use Doctrine\Common\Persistence\ObjectRepository;
+use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Mapping as ORM;
 use Concrete\Core\Support\Facade\Config;
 use Concrete\Core\Support\Facade\Events;
@@ -21,6 +27,7 @@ use Ercol\Entity\ErcolProduct;
 use Ercol\Entity\ErcolRange;
 use Ercol\Entity\Material;
 use Ercol\Entity\MaterialType;
+use Ercol\Helper\ProductHelper;
 use Job as AbstractJob;
 use Queue;
 use ZendQueue\Message as ZendQueueMessage;
@@ -59,6 +66,9 @@ class Worker
     protected $added = 0;
     protected $updated = 0;
     protected $removed = 0;
+    /**
+     * @var EntityManager
+     */
     protected $em = false;
     protected $repositories = [];
     protected $rowLog = [];
@@ -72,6 +82,7 @@ class Worker
     }
 
     public function getStats(){
+
         return [
             'processed' => $this->processed,
             'added' => $this->added,
@@ -79,6 +90,73 @@ class Worker
             'removed' => $this->removed
         ];
     }
+
+    protected function syncPage($data)
+    {
+        if($productID = intval($data['id'])){
+            $pl = new PageList();
+            $pl->filterByAttribute('pim_product_id', $productID);
+            $pl->filterByParentID(212);
+            if($pl->getTotalResults()){
+                return true;
+            }
+            else{
+                $this->createPage($productID);
+            }
+        }
+    }
+
+    protected function syncMetadata($data)
+    {
+        if($productID = intval($data['id'])){
+            $respository = $this->getRepository(ErcolProduct::class);
+
+            if($respository) {
+                /**
+                 * @var $product ErcolProduct
+                 */
+                $product = $respository->find($productID);
+                $data = ProductHelper::getProductDataByProduct($product);
+                $product->setVariationCache(json_encode($data));
+//                $this->em->persist($product);
+                $this->em->flush();
+//                $respository->
+////                $this->em->persist($product);
+//                $this->em->flush();
+            }
+        }
+    }
+
+    protected function createPage($id)
+    {
+        $respository = $this->getRepository(ErcolProduct::class);
+
+        if($respository) {
+            /**
+             * @var $product ErcolProduct
+             */
+            $product = $respository->find($id);
+
+            /**
+             * @var $parentPage Page
+             */
+            $parentPage = Page::getByID('212');
+            $pageType = Type::getByHandle('store_product');
+            $template = Template::getByHandle('product');
+
+            /**
+             * @var Page
+             */
+            $newPage = $parentPage->add($pageType, array(
+                'cName' => $product->getName()
+            ), $template);
+
+            if ($newPage->setAttribute('pim_product_id', $id)) {
+                return $newPage;
+            }
+        }
+    }
+
 
     public function processRow($row){
 
@@ -89,10 +167,16 @@ class Worker
 
         $start = microtime(true);
         switch($action){
+            case 'metadata':
+                $this->syncMetadata($data);
+                break;
+            case 'page':
+                $this->syncPage($data);
+                break;
             case 'remove':
                 $this->removeProduct($data);
                 break;
-            default:
+            case 'sync':
                 $this->syncProduct($data);
         }
 
@@ -138,12 +222,16 @@ class Worker
         }
 
         $this->createOrUpdateProduct($p);
-        Log::addEntry('Flushes: '.$p->flushed);
+        // Log::addEntry('Flushes: '.$p->flushed);
 
         return $p;
     }
 
-    protected function getRespository($class)
+    /**
+     * @param $class
+     * @return ObjectRepository
+     */
+    protected function getRepository($class)
     {
         if(!$this->em) {
             $this->em = dbORM::entityManager();
@@ -174,7 +262,7 @@ class Worker
         /**
          * @var $repository RepositoryFactory
          */
-        $rangeRepository = $this->getRespository($class);
+        $rangeRepository = $this->getRepository($class);
 
         $range = $rangeRepository->findOneBy(['name' => $rangeName]);
         if (!$range) {
@@ -202,7 +290,7 @@ class Worker
         /**
          * @var $repository RepositoryFactory
          */
-        $productRepository = $this->getRespository($class);
+        $productRepository = $this->getRepository($class);
 
         $start = microtime(true);
         $product = $productRepository->findOneBy(['code' => $skuPrefix]);
@@ -244,7 +332,7 @@ class Worker
         /**
          * @var $repository RepositoryFactory
          */
-        $repository = $this->getRespository($class);
+        $repository = $this->getRepository($class);
 
         $type = $repository->findOneBy(['name' => $name]);
         if (!$type) {
@@ -279,7 +367,7 @@ class Worker
             /**
              * @var $repository RepositoryFactory
              */
-            $repository = $this->getRespository($class);
+            $repository = $this->getRepository($class);
 
             $material = $repository->findOneBy(['code' => $code]);
             if (!$material) {
@@ -454,9 +542,14 @@ class Worker
             foreach ($this->aks as $ak) {
                 $start = microtime(true);
                 $akHandle = $ak->getAttributeKeyHandle();
+                $value = $row['attr_'.$akHandle];
                 $this->rowLog['GetAttributeHandle:'.$akHandle] = (microtime(true)-$start);
-                $product->setAttribute($ak, $row['attr_'.$akHandle]);
+                if($product->getAttribute($akHandle) != $value){
+                    $product->setAttribute($ak, $value);
                 $this->rowLog['SetAttributes:'.$akHandle] = (microtime(true)-$start);
+                }else{
+                    $this->rowLog['SkipAttributes:'.$akHandle.':'.$value] = (microtime(true)-$start);
+                }
             }
         }
         else {

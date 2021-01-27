@@ -6,9 +6,13 @@ use Concrete\Core\Job\QueueableJob;
 use Concrete\Core\Page\Controller\DashboardPageController;
 use Concrete\Core\Package\Package as Package;
 use Concrete\Core\File\File;
+use Concrete\Core\Support\Facade\DatabaseORM as dbORM;
 use Concrete\Core\Support\Facade\Facade;
 use Concrete\Package\CommunityStore\Src\CommunityStore\Product\ProductList;
 use Concrete\Package\CommunityStoreImport\Src\CommunityStoreImport\Import\Worker;
+use Doctrine\Common\Persistence\ObjectRepository;
+use Doctrine\ORM\Repository\RepositoryFactory;
+use Ercol\Entity\ErcolProduct;
 use Log;
 use Exception;
 use Config;
@@ -63,11 +67,79 @@ class Import extends DashboardPageController
             }
         }
     }
+
+    protected function updateMetaData(){
+
+        $this->em = dbORM::entityManager();
+
+        /**
+         * @var $repository ObjectRepository
+         */
+        $repository = $this->em->getRepository(ErcolProduct::class);
+
+        $products = $repository->findAll();
+
+        $queued = 0;
+        /**
+         * @var $q \ZendQueue\Queue
+         */
+        $q = Queue::get('community_store_import', array('timeout' => 60));
+        if($q){
+            foreach($products as $product){
+                /**
+                 * @var $product ErcolProduct
+                 */
+                $message = [
+                    'action' => 'metadata',
+                    'data' => ['id' => $product->getId()]
+                ];
+
+                $q->send(json_encode($message));
+                $queued++;
+            }
+        }
+
+        return $queued;
+    }
+
+    protected function createUpdateProductPage(){
+
+        $this->em = dbORM::entityManager();
+
+        /**
+         * @var $repository ObjectRepository
+         */
+        $repository = $this->em->getRepository(ErcolProduct::class);
+
+        $products = $repository->findAll();
+
+        /**
+         * @var $q \ZendQueue\Queue
+         */
+        $q = Queue::get('community_store_import', array('timeout' => 60));
+        if(!$q->count()){
+            foreach($products as $product){
+                /**
+                 * @var $product ErcolProduct
+                 */
+                $message = [
+                    'action' => 'page',
+                    'data' => ['id' => $product->getId()]
+                ];
+
+                $q->send(json_encode($message));
+            }
+        }
+    }
+
     public function run()
     {
         $this->saveSettings();
 
         $this->removeInActiveProducts();
+//        $this->createUpdateProductPage();
+        $count = $this->updateMetaData();
+        $this->set('success', $this->get('success') . "Queued {$count} products to update metadata");
 
         $MAX_TIME = Config::get('community_store_import.max_execution_time');
         $MAX_EXECUTION_TIME = ini_get('max_execution_time');
@@ -79,6 +151,19 @@ class Import extends DashboardPageController
         ini_set('auto_detect_line_endings', TRUE);
 
         $f = \File::getByID(Config::get('community_store_import.import_file'));
+        if($f) {
+            $this->set('success', $this->get('success') . "Import queued: $addedToQueue added, $total rows.");
+
+            ini_set('auto_detect_line_endings', FALSE);
+            ini_set('max_execution_time', $MAX_EXECUTION_TIME);
+            ini_set('max_input_time', $MAX_INPUT_TIME);
+        }
+
+        Log::addNotice($this->get('success'));
+    }
+
+    protected function importFromFile($f)
+    {
         $fname = $_SERVER['DOCUMENT_ROOT'] . $f->getApprovedVersion()->getRelativePath();
 
         if (!file_exists($fname) || !is_readable($fname)) {
@@ -197,7 +282,7 @@ class Import extends DashboardPageController
         $defaults = [
             'pqty' => 0,
             'pqtyunlim' => 1,
-            'pnoqty' => 0,
+            'pnoqty' => 1,
             'ptaxable' => 1,
             'pactive' => 1,
             'pshippable' => 1,
@@ -220,10 +305,10 @@ class Import extends DashboardPageController
          */
         $q = Queue::get('community_store_import', array('timeout' => 60));
 
-        // Space our rows apart
-        for($waste=0; $waste<9000; $waste++){
-            fgetcsv($handle, $line_length, $delim, $enclosure);
-        }
+        // // Space our rows apart
+        // for($waste=0; $waste<9000; $waste++){
+        //     fgetcsv($handle, $line_length, $delim, $enclosure);
+        // }
 
         while (($csv = fgetcsv($handle, $line_length, $delim, $enclosure)) !== FALSE) {
             if (count($csv) === 1) {
@@ -253,33 +338,26 @@ class Import extends DashboardPageController
 
             $total++;
         }
-
-        $this->set('success', $this->get('success') . "Import queued: $addedToQueue added, $total rows.");
-        Log::addNotice($this->get('success'));
-
-        ini_set('auto_detect_line_endings', FALSE);
-        ini_set('max_execution_time', $MAX_EXECUTION_TIME);
-        ini_set('max_input_time', $MAX_INPUT_TIME);
     }
-
 
     public function process()
     {
         session_write_close();
 
 
+        $w = new Worker();
+
         /**
          * @var $q \ZendQueue\Queue
          */
         $q = Queue::get('community_store_import', array('timeout' => 10));
         if($q->count()){
-            for($i = 0; $i<1; $i++){
-                $messages = $q->receive(1);
+            for($i = 0; $i<10; $i++){
+                $messages = $q->receive(2);
                 foreach($messages as $message){
                     /**
                      * @var $message Message
                      */
-                    $w = new Worker();
                     $data = json_decode($message->body, JSON_OBJECT_AS_ARRAY);
                     if($w->processRow($data)){
                         $q->deleteMessage($message);
