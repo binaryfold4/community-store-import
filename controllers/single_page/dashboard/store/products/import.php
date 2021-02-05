@@ -282,7 +282,7 @@ class Import extends DashboardPageController
         $defaults = [
             'pqty' => 0,
             'pqtyunlim' => 1,
-            'pnoqty' => 1,
+            'pnoqty' => 0, // If set to 1, you can only add one of these into the basket
             'ptaxable' => 1,
             'pactive' => 1,
             'pshippable' => 1,
