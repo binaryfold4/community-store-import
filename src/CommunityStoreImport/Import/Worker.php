@@ -649,7 +649,7 @@ class Worker
         return $p;
     }
 
-    private function update($p, $row)
+    private function update(Product $p, $row)
     {
         $row['pprice'] = str_replace(',', '', $row['pprice']);
 
@@ -679,6 +679,8 @@ class Worker
         if ($row['pheight']) $p->setHeight($row['pheight']);
         if ($row['pweight']) $p->setWeight($row['pweight']);
         if ($row['pnumberitems']) $p->setNumberItems($row['pnumberitems']);
+
+        $p->setDateAvailableEnd();
 
         // CS v1.4.2+
         if ($row['pmaxqty']) $p->setMaxQty($row['pmaxqty']);
