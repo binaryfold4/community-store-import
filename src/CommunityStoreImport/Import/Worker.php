@@ -585,7 +585,7 @@ class Worker
         }
     }
 
-    private function add($row)
+    public function add($row)
     {
         $row['pprice'] = str_replace(',', '', $row['pprice']);
 
@@ -631,7 +631,7 @@ class Worker
             'pMaxQty' => (isset($row['pmaxqty']) ? $row['pmaxqty'] : 0),
 
             // Not supported in CSV data
-            'pfID' => intval(Config::get('community_store_import.default_image')),
+            'pfID' => intval($row['pimageid']) ? intval($row['pimageid']) : intval(Config::get('community_store_import.default_image')),
             'pVariations' => false,
             'pQuantityPrice' => false,
             'pTaxClass' => 1        // 1 = default tax class
@@ -649,7 +649,7 @@ class Worker
         return $p;
     }
 
-    private function update(Product $p, $row)
+    public function update($p, $row)
     {
         $row['pprice'] = str_replace(',', '', $row['pprice']);
 
@@ -689,6 +689,8 @@ class Worker
         if ($row['pqtysteps']) $p->setQtySteps($row['pqtysteps']);
         if ($row['pseparateship']) $p->setSeparateShip($row['pseparateship']);
         if ($row['ppackagedata']) $p->setPackageData($row['ppackagedata']);
+
+        if($imageID = intval($row['pimageid'])) $p->setImageId($imageID);
 
         if (!$p->getImageId())
             $p->setImageId(intval(Config::get('community_store_import.default_image')));
