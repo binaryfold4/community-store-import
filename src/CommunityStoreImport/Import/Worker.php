@@ -712,6 +712,21 @@ class Worker
         $p = $p->save();
         $this->rowLog['Save storeproduct'] = (microtime(true)-$start);
 
+        $options = $p->getOptions();
+        $createProductOption=true;
+        foreach($options as $option){
+            /**
+             * @var $option ProductOption
+             */
+            if($option->getHandle()=='scatter_material'){
+                $createProductOption = false;
+                break;
+            }
+        }
+        if($createProductOption){
+            ProductOption::add($p, 'Scatter Material', count($options)+1, 'hidden', 'scatter_material');
+        }
+
         return $p;
     }
 
