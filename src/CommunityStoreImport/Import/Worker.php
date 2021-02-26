@@ -1,6 +1,7 @@
 <?php
 namespace Concrete\Package\CommunityStoreImport\Src\CommunityStoreImport\Import;
 
+use Carbon\Carbon;
 use Concrete\Core\File\FileList;
 use Concrete\Core\File\Import\FileImporter;
 use Concrete\Core\File\Importer;
@@ -116,10 +117,15 @@ class Worker
                  * @var $product ErcolProduct
                  */
                 $product = $respository->find($productID);
-                $data = ProductHelper::getProductDataByProduct($product);
-                $product->setVariationCache(json_encode($data));
-//                $this->em->persist($product);
-                $this->em->flush();
+                try {
+                    $data = ProductHelper::getProductDataByProduct($product);
+                    $product->setVariationCache(json_encode($data));
+                    //                $this->em->persist($product);
+                    $this->em->flush();
+                }
+                catch( \Exception $e){
+                    Log::addEntry('Product Import: '. $e->getMessage());
+                }
 //                $respository->
 ////                $this->em->persist($product);
 //                $this->em->flush();
@@ -640,6 +646,36 @@ class Worker
         // Save product
         $p = Product::saveProduct($data);
 
+        if($dateFrom = $row['available_from']){
+            try {
+                $date = Carbon::createFromFormat('d/m/Y', $dateFrom);
+                $date->setTime(0,0,0);
+                $p->setDateAvailableStart($date->toDateTime());
+            }catch( \Exception $e){
+
+            }
+        }
+        else{
+            $p->setDateAvailableStart(null);
+        }
+
+        if($dateTo = $row['available_to']){
+            try {
+                $date = Carbon::createFromFormat('d/m/Y', $dateFrom);
+                $date->setTime(23,59,59);
+                $p->setDateAvailableEnd($date->toDateTime());
+            }catch( \Exception $e){
+
+            }
+        }
+        else{
+            $p->setDateAvailableEnd(null);
+        }
+
+        $p->save();
+
+        $this->addProductOptions($p, $row);
+
         // Add product attributes
         $this->setAttributes($p, $row);
 
@@ -649,7 +685,7 @@ class Worker
         return $p;
     }
 
-    public function update($p, $row)
+    public function update(Product $p, $row)
     {
         $row['pprice'] = str_replace(',', '', $row['pprice']);
 
@@ -680,7 +716,36 @@ class Worker
         if ($row['pweight']) $p->setWeight($row['pweight']);
         if ($row['pnumberitems']) $p->setNumberItems($row['pnumberitems']);
 
-        $p->setDateAvailableEnd();
+        if($dateFrom = $row['available_from']){
+            try {
+                $date = Carbon::createFromFormat('d/m/Y', $dateFrom);
+                $date->setTime(0,0,0);
+                $p->setDateAvailableStart($date->toDateTime());
+                $this->rowLog['Set start:'.$date->toDateString()];
+            }catch( \Exception $e){
+
+            }
+        }
+        else{
+            $p->setDateAvailableStart(null);
+            $this->rowLog['Set start: null'];
+        }
+
+        if($dateTo = $row['available_to']){
+            try {
+                $date = Carbon::createFromFormat('d/m/Y', $dateTo);
+                $date->setTime(23,59,59);
+                $p->setDateAvailableEnd($date->toDateTime());
+                $this->rowLog['Set end:'.$date->toDateString()];
+            }catch( \Exception $e){
+                $this->rowLog['Set end: date format incorrect ['.$dateTo.']'];
+            }
+        }
+        else{
+            $p->setDateAvailableEnd(null);
+            $this->rowLog['Set end: null'];
+
+        }
 
         // CS v1.4.2+
         if ($row['pmaxqty']) $p->setMaxQty($row['pmaxqty']);
@@ -709,25 +774,39 @@ class Worker
          * @var $p Product
          */
         $start = microtime(true);
-        $p = $p->save();
+        $p->save();
         $this->rowLog['Save storeproduct'] = (microtime(true)-$start);
 
-        $options = $p->getOptions();
-        $createProductOption=true;
-        foreach($options as $option){
-            /**
-             * @var $option ProductOption
-             */
-            if($option->getHandle()=='scatter_material'){
-                $createProductOption = false;
-                break;
-            }
-        }
-        if($createProductOption){
-            ProductOption::add($p, 'Scatter Material', count($options)+1, 'hidden', 'scatter_material');
-        }
+        $this->addProductOptions($p, $row);
 
         return $p;
+    }
+
+    protected function addProductOptions(Product $p, $row){
+        if($row['attr_product_scatter_sku_prefix']) {
+            $options = $p->getOptions();
+            $createProductOption = true;
+            foreach ($options as $option) {
+                /**
+                 * @var $option ProductOption
+                 */
+                if ($option->getHandle() == 'scatter_material') {
+                    $createProductOption = false;
+                    break;
+                }
+            }
+            if ($createProductOption) {
+                /**
+                 * @var $po ProductOption
+                 */
+                if($po = ProductOption::add($p, 'Scatter Material', count($options) + 1, 'hidden', 'scatter_material')){
+                    $this->rowLog['Created product option ['.$po->getHandle().']:['.$po->getID().']'];
+                }
+                else{
+                    $this->rowLog['Failed to create product option scatter'];
+                }
+            }
+        }
     }
 
 

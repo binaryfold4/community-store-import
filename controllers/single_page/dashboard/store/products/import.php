@@ -136,27 +136,17 @@ class Import extends DashboardPageController
     {
         $this->saveSettings();
 
-        $this->removeInActiveProducts();
+//        $this->removeInActiveProducts();
 //        $this->createUpdateProductPage();
-        $count = $this->updateMetaData();
+//        $count = $this->updateMetaData();
+
         $this->set('success', $this->get('success') . "Queued {$count} products to update metadata");
-
-        $MAX_TIME = Config::get('community_store_import.max_execution_time');
-        $MAX_EXECUTION_TIME = ini_get('max_execution_time');
-        $MAX_INPUT_TIME = ini_get('max_input_time');
-        $MAX_ROWS = Config::get('community_store_import.max_rows');
-
-        ini_set('max_execution_time', $MAX_TIME);
-        ini_set('max_input_time', $MAX_TIME);
-        ini_set('auto_detect_line_endings', TRUE);
 
         $f = \File::getByID(Config::get('community_store_import.import_file'));
         if($f) {
-            $this->set('success', $this->get('success') . "Import queued: $addedToQueue added, $total rows.");
+            $this->importFromFile($f);
 
-            ini_set('auto_detect_line_endings', FALSE);
-            ini_set('max_execution_time', $MAX_EXECUTION_TIME);
-            ini_set('max_input_time', $MAX_INPUT_TIME);
+            $this->set('success', $this->get('success') . "Import queued: $addedToQueue added, $total rows.");
         }
 
         Log::addNotice($this->get('success'));
@@ -176,10 +166,25 @@ class Import extends DashboardPageController
             return;
         }
 
+        $MAX_TIME = Config::get('community_store_import.max_execution_time');
+        $MAX_EXECUTION_TIME = ini_get('max_execution_time');
+        $MAX_INPUT_TIME = ini_get('max_input_time');
+        $MAX_ROWS = Config::get('community_store_import.max_rows');
+
+        ini_set('max_execution_time', $MAX_TIME);
+        ini_set('max_input_time', $MAX_TIME);
+        ini_set('auto_detect_line_endings', TRUE);
+
         $delim = Config::get('community_store_import.csv.delimiter');
+        if(!$delim){
+            $delim = ',';
+        }
         $delim = ($delim === '\t') ? "\t" : $delim;
 
         $enclosure = Config::get('community_store_import.csv.enclosure');
+        if(!$enclosure){
+            $enclosure = '"';
+        }
         $line_length = Config::get('community_store_import.csv.line_length');
 
         // Get headings
@@ -198,7 +203,7 @@ class Import extends DashboardPageController
             'LeadTime (Days)' => 'attr_lead_time_days',
             'Product Sku' => 'pSKU',
             'Product On Winman?' => 'Product On Winman?',
-            'Scatter Prefix if Applicable' =>  '',
+            'Scatter Prefix if Applicable' =>  'attr_product_scatter_sku_prefix',
             'Product Id' => '',
             'Product Description' => '',
             'DC 001 TXT' => '',
@@ -228,14 +233,14 @@ class Import extends DashboardPageController
             'CUBE Ft' => '',
             'Sac' => '',
             'Collection Description Copy' => 'attr_product_collection_description',
-            'Marketing / Designer Product Copy' => '',
+            'Marketing / Designer Product Copy' => 'attr_product_marketing_description',
             'exclusive_to' => '',
             'exclusive_url' => '',
-            'Technical Descripton' => 'attr_product_collection_description',
+            'Technical Descripton' => 'attr_product_technical_description',
             'Timber' => 'attr_product_timber',
             'Fabric Collection' => '',
-            'Designed by' => '',
-            'Country of Origin' => '',
+            'Designed by' => 'attr_designed_by',
+            'Country of Origin' => 'attr_country_of_origin',
             'dim_width' => 'attr_product_width',
             'dim_min_width' => 'attr_product_min_width',
             'dim_max_width' => 'attr_product_max_width',
@@ -266,9 +271,8 @@ class Import extends DashboardPageController
             'Additional Information' => '',
             'Product Sheet Download' => '',
             'Assembly Instructions Download Link' => 'attr_product_assembly_instructions_link',
-//            'Status' => '',
-//            'Product Sku' => '',
-            'gg' => ''
+            'Availble From' => 'available_from',
+            'Available to' => 'available_to'
         ];
 
         $headingsRewrite = array_map(function($heading)use($headingsMap){
@@ -338,6 +342,8 @@ class Import extends DashboardPageController
 
             $total++;
         }
+
+        return $addedToQueue;
     }
 
     public function process()
