@@ -311,8 +311,11 @@ class Worker
             $product->setCode($skuPrefix);
             $product->setName($p->getName());
 
-            if($range = $this->getRange($p)) {
-                $product->setRanges([$range]);
+            $currentRanges = $product->getRanges();
+            if(!$currentRanges->count()) {
+                if ($range = $this->getRange($p)) {
+                    $product->setRanges([$range]);
+                }
             }
 
             $start = microtime(true);

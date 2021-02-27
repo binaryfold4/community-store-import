@@ -152,7 +152,7 @@ class Import extends DashboardPageController
         Log::addNotice($this->get('success'));
     }
 
-    protected function importFromFile($f)
+    protected function importFromFile(\Concrete\Core\Entity\File\File $f)
     {
         $fname = $_SERVER['DOCUMENT_ROOT'] . $f->getApprovedVersion()->getRelativePath();
 
@@ -293,7 +293,8 @@ class Import extends DashboardPageController
             'pcreateuseraccount' => 0,
             'pautocheckout' => 0,
             'pexclusive' => 0,
-            'pallowdecimalqty' => 0
+            'pallowdecimalqty' => 0,
+            'attr_import_file_id' => $f->getFileID()
         ];
 
         if ($this->isValid($headings)) {
