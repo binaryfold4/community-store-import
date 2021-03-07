@@ -553,11 +553,13 @@ class Worker
                 $akHandle = $ak->getAttributeKeyHandle();
                 $value = $row['attr_'.$akHandle];
                 $this->rowLog['GetAttributeHandle:'.$akHandle] = (microtime(true)-$start);
-                if($product->getAttribute($akHandle) != $value){
+
+                $currentValue = $product->getAttribute($akHandle);
+                if($currentValue != $value){
                     $product->setAttribute($ak, $value);
-                $this->rowLog['SetAttributes:'.$akHandle] = (microtime(true)-$start);
+                    $this->rowLog['SetAttributes:'.$akHandle] = (microtime(true)-$start);
                 }else{
-                    $this->rowLog['SkipAttributes:'.$akHandle.':'.$value] = (microtime(true)-$start);
+                    $this->rowLog['SkipAttributes:'.$akHandle.':'.$value.' vs '.$currentValue] = (microtime(true)-$start);
                 }
             }
         }

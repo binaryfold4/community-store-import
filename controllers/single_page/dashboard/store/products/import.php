@@ -204,6 +204,7 @@ class Import extends DashboardPageController
             'Product Sku' => 'pSKU',
             'Product On Winman?' => 'Product On Winman?',
             'Scatter Prefix if Applicable' =>  'attr_product_scatter_sku_prefix',
+            'Number of Scatters' => 'attr_scatter_quantity',
             'Product Id' => '',
             'Product Description' => '',
             'DC 001 TXT' => '',
@@ -294,7 +295,8 @@ class Import extends DashboardPageController
             'pautocheckout' => 0,
             'pexclusive' => 0,
             'pallowdecimalqty' => 0,
-            'attr_import_file_id' => $f->getFileID()
+            'attr_import_file_id' => $f->getFileID(),
+            'attr_import_run_id' => $f->getFileID()
         ];
 
         if ($this->isValid($headings)) {
