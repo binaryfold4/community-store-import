@@ -653,6 +653,10 @@ class Worker
 
         if($dateFrom = $row['available_from']){
             try {
+                if(preg_match('#[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}#', $dateFrom))
+                {
+
+                }
                 $date = Carbon::createFromFormat('d/m/Y', $dateFrom);
                 $date->setTime(0,0,0);
                 $p->setDateAvailableStart($date->toDateTime());
@@ -788,8 +792,9 @@ class Worker
     }
 
     protected function addProductOptions(Product $p, $row){
+        $options = $p->getOptions();
+
         if($row['attr_product_scatter_sku_prefix']) {
-            $options = $p->getOptions();
             $createProductOption = true;
             foreach ($options as $option) {
                 /**
@@ -810,6 +815,28 @@ class Worker
                 else{
                     $this->rowLog['Failed to create product option scatter'];
                 }
+            }
+        }
+
+        $createConfigurationImage = true;
+        foreach ($options as $option) {
+            /**
+             * @var $option ProductOption
+             */
+            if ($option->getHandle() == 'configuration_image') {
+                $createConfigurationImage = false;
+                break;
+            }
+        }
+        if ($createConfigurationImage) {
+            /**
+             * @var $po ProductOption
+             */
+            if($po = ProductOption::add($p, 'Configuration Image', count($options) + 1, 'hidden', 'configuration_image')){
+                $this->rowLog['Created product option ['.$po->getHandle().']:['.$po->getID().']'];
+            }
+            else{
+                $this->rowLog['Failed to create product option configuration_image'];
             }
         }
     }

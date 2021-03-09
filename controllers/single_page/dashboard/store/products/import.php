@@ -273,7 +273,8 @@ class Import extends DashboardPageController
             'Product Sheet Download' => '',
             'Assembly Instructions Download Link' => 'attr_product_assembly_instructions_link',
             'Availble From' => 'available_from',
-            'Available to' => 'available_to'
+            'Available to' => 'available_to',
+            'Exclusive to' => 'attr_exclusive_to'
         ];
 
         $headingsRewrite = array_map(function($heading)use($headingsMap){
@@ -296,7 +297,6 @@ class Import extends DashboardPageController
             'pexclusive' => 0,
             'pallowdecimalqty' => 0,
             'attr_import_file_id' => $f->getFileID(),
-            'attr_import_run_id' => $f->getFileID()
         ];
 
         if ($this->isValid($headings)) {
@@ -311,11 +311,6 @@ class Import extends DashboardPageController
          * @var $q \ZendQueue\Queue
          */
         $q = Queue::get('community_store_import', array('timeout' => 60));
-
-        // // Space our rows apart
-        // for($waste=0; $waste<9000; $waste++){
-        //     fgetcsv($handle, $line_length, $delim, $enclosure);
-        // }
 
         while (($csv = fgetcsv($handle, $line_length, $delim, $enclosure)) !== FALSE) {
             if (count($csv) === 1) {
