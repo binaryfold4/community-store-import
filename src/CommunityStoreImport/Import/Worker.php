@@ -205,6 +205,65 @@ class Worker
         }
     }
 
+    protected function transformRow($row){
+
+        if($row['ppackagedata'])
+            return $row;
+
+        $packages = [];
+
+        $packages[] = [
+            'length' => 'Boxed Length',
+            'width' => 'Box 1 Width',
+            'height' => 'Box 1 Height',
+            'weight' => 'Box 1 Weight'
+        ];
+
+        $packages[] = [
+            'length' => 'Box 2 Length',
+            'width' => 'Box 2 Width',
+            'height' => 'Box 2 Height',
+            'weight' => 'Box 2 Weight'
+        ];
+
+        $packages[] = [
+            'length' => 'Box 3 Length',
+            'width' => 'Box 3 Width',
+            'height' => 'Box 3 Height',
+            'weight' => 'Box 3 Weight'
+        ];
+
+        $packages[] = [
+            'length' => 'Box 4 Length',
+            'width' => 'Box 4 Width',
+            'height' => 'Box 4 Height',
+            'weight' => 'Box 4 Weight'
+        ];
+
+        $packageData = [];
+        $packageDataFormat = '{weight} {length}x{width}x{height}';
+
+        foreach($packages as $packageFields){
+            $packageValues = [];
+            foreach($packageFields as $dimension => $packageField){
+                $value = trim($row[strtolower($packageField)]);
+                if(!$value){
+                    continue 2;
+                }
+
+                $packageValues['{'.$dimension.'}'] = $value;
+            }
+            $packageData[] = str_replace(array_keys($packageValues), array_values($packageValues), $packageDataFormat);
+        }
+
+        Log::addEntry($row['psku'].' has '.count($packageData).' packages');
+        Log::addEntry($row['psku'].' headings '.implode('|', array_keys($row)));
+
+        $row['ppackagedata'] = implode("\n", $packageData);
+
+        return $row;
+    }
+
     protected function syncProduct($row){
         // Get attribute headings
         foreach (array_keys($row) as $heading) {
@@ -212,6 +271,8 @@ class Worker
                 $this->attributes[] = $heading;
             }
         }
+
+        $row = $this->transformRow($row);
 
         $start = microtime(true);
         $p = Product::getBySKU($row['psku']);

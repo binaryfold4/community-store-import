@@ -211,9 +211,9 @@ class Import extends DashboardPageController
             'DC 002 TXT' => '',
             'DC 004 TXT' => '',
             'Boxed Length' => 'attr_product_boxed_length',
-            'Boxed Height' => 'attr_product_boxed_height',
-            'Boxed Width' => 'attr_product_boxed_width',
-            'Boxed Weight' => 'attr_product_boxed_weight',
+            'Box 1 Height' => 'attr_product_boxed_height',
+            'Box 1 Width' => 'attr_product_boxed_width',
+            'Box 1 Weight' => 'attr_product_boxed_weight',
             'Pack Size' => '',
             'Dimension Quantity' => '',
             'Location' => '',
@@ -263,13 +263,13 @@ class Import extends DashboardPageController
             'seat_interior' => 'attr_product_seat_interior',
             'back_interior' => 'attr_product_back_interior',
             'scatter_interior' => 'attr_product_scatter_interior',
-            'Reversible Cushions' => '',
-            'Reclines' => '',
-            'Max Loading Weight' => '',
-            'assembly' => '',
+            'Reversible Cushions' => 'attr_product_scatter_interior',
+            'Reclines' => 'attr_product_reclines',
+            'Max Loading Weight' => 'attr_product_max_loading_weight',
+            'assembly' => 'attr_product_assembly',
             'Timber & Construction' => 'attr_product_construction',
-            'Care Instructions' => '',
-            'Additional Information' => '',
+            'Care Instructions' => 'attr_product_care_instructions',
+            'Additional Information' => 'attr_product_additional_info',
             'Product Sheet Download' => '',
             'Assembly Instructions Download Link' => 'attr_product_assembly_instructions_link',
             'Availble From' => 'available_from',
@@ -322,6 +322,7 @@ class Import extends DashboardPageController
                     break;
                 }
             }
+
             // Make associative arrray
             $row = array_combine($headingsRewrite, $csv);
             $row = array_merge($defaults, $row);
