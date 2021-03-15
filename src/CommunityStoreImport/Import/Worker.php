@@ -709,6 +709,10 @@ class Worker
             'pTaxClass' => 1        // 1 = default tax class
         );
 
+        if(!$row['pprice']){
+            $row['pactive'] = 0;
+        }
+
         // Save product
         $p = Product::saveProduct($data);
 
@@ -759,6 +763,10 @@ class Worker
     {
         $row['pprice'] = str_replace(',', '', $row['pprice']);
 
+        if(!$row['pprice']){
+            $row['pactive'] = 0;
+        }
+
         if ($row['psku']) $p->setSKU($row['psku']);
         if ($row['pname']) $p->setName($row['pname']);
         if ($row['pdesc']) $p->setDescription($row['pdesc']);
@@ -785,6 +793,8 @@ class Worker
         if ($row['pheight']) $p->setHeight($row['pheight']);
         if ($row['pweight']) $p->setWeight($row['pweight']);
         if ($row['pnumberitems']) $p->setNumberItems($row['pnumberitems']);
+
+
 
         if($dateFrom = $row['available_from']){
             try {
