@@ -709,8 +709,13 @@ class Worker
             'pTaxClass' => 1        // 1 = default tax class
         );
 
-        if(!$row['pprice']){
-            $row['pactive'] = 0;
+        if(!$data['pPrice']){
+            $data['pActive'] = 0;
+        }
+
+
+        if(trim($row['attr_exclusive_to'])){
+            $data['pQtyUnlim'] = 0;
         }
 
         // Save product
@@ -718,10 +723,6 @@ class Worker
 
         if($dateFrom = $row['available_from']){
             try {
-                if(preg_match('#[0-9]{1,2}/[0-9]{1,2}/[0-9]{4}#', $dateFrom))
-                {
-
-                }
                 $date = Carbon::createFromFormat('d/m/Y', $dateFrom);
                 $date->setTime(0,0,0);
                 $p->setDateAvailableStart($date->toDateTime());
@@ -763,38 +764,44 @@ class Worker
     {
         $row['pprice'] = str_replace(',', '', $row['pprice']);
 
-        if(!$row['pprice']){
+        if(!intval($row['pprice'])){
             $row['pactive'] = 0;
+            Log::addEntry('NOPRICE: '.$row['psku'].' is ['.$row['pprice'].']');
+        }
+
+        if(trim($row['attr_exclusive_to'])){
+            $row['pqtyunlim'] = 0;
         }
 
         if ($row['psku']) $p->setSKU($row['psku']);
         if ($row['pname']) $p->setName($row['pname']);
         if ($row['pdesc']) $p->setDescription($row['pdesc']);
         if ($row['pdetail']) $p->setDetail($row['pdetail']);
-        if ($row['pfeatured']) $p->setIsFeatured($row['pfeatured']);
-        if ($row['pqty']) $p->setQty($row['pqty']);
-        if ($row['pnoqty']) $p->setNoQty($row['pnoqty']);
-        if ($row['ptaxable']) $p->setISTaxable($row['ptaxable']);
-        if ($row['pactive']) $p->setIsActive($row['pactive']);
-        if ($row['pshippable']) $p->setIsShippable($row['pshippable']);
-        if ($row['pcreateuseraccount']) $p->setCreatesUserAccount($row['pcreateuseraccount']);
-        if ($row['pautocheckout']) $p->setAutoCheckout($row['pautocheckout']);
-        if ($row['pexclusive']) $p->setIsExclusive($row['pexclusive']);
 
-        if ($row['pprice']) $p->setPrice($row['pprice']);
-        if ($row['psaleprice']) $p->setSalePrice($row['psaleprice']);
+        $p->setIsFeatured($row['pfeatured']);
+        $p->setQty($row['pqty']);
+        $p->setNoQty($row['pnoqty']);
+        $p->setISTaxable($row['ptaxable']);
+        $p->setIsActive($row['pactive']);
+        $p->setIsShippable($row['pshippable']);
+        $p->setCreatesUserAccount($row['pcreateuseraccount']);
+        $p->setAutoCheckout($row['pautocheckout']);
+        $p->setIsExclusive($row['pexclusive']);
+        $p->setAllowDecimalQty($row['pallowdecimalqty']);
+
+        $p->setPrice($row['pprice']);
+        $p->setIsUnlimited($row['pqtyunlim']);
+        $p->setSalePrice($row['psaleprice']);
+
         if ($row['ppricemaximum']) $p->setPriceMaximum($row['ppricemaximum']);
         if ($row['ppriceminimum']) $p->setPriceMinimum($row['ppriceminimum']);
         if ($row['ppricesuggestions']) $p->setPriceSuggestions($row['ppricesuggestions']);
-        if ($row['pqtyunlim']) $p->setIsUnlimited($row['pqtyunlim']);
         if ($row['pbackorder']) $p->setAllowBackOrder($row['pbackorder']);
         if ($row['plength']) $p->setLength($row['plength']);
         if ($row['pwidth']) $p->setWidth($row['pwidth']);
         if ($row['pheight']) $p->setHeight($row['pheight']);
         if ($row['pweight']) $p->setWeight($row['pweight']);
         if ($row['pnumberitems']) $p->setNumberItems($row['pnumberitems']);
-
-
 
         if($dateFrom = $row['available_from']){
             try {
