@@ -263,7 +263,7 @@ class Import extends DashboardPageController
             'seat_interior' => 'attr_product_seat_interior',
             'back_interior' => 'attr_product_back_interior',
             'scatter_interior' => 'attr_product_scatter_interior',
-            'Reversible Cushions' => 'attr_product_scatter_interior',
+            'Reversible Cushions' => 'attr_product_reversible_cushions',
             'Reclines' => 'attr_product_reclines',
             'Max Loading Weight' => 'attr_product_max_loading_weight',
             'assembly' => 'attr_product_assembly',
