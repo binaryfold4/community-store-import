@@ -243,19 +243,29 @@ class Worker
         $packageData = [];
         $packageDataFormat = '{weight} {length}x{width}x{height}';
 
+        $packageLog = [];
+
+        $packageIndex = 1;
         foreach($packages as $packageFields){
             $packageValues = [];
             foreach($packageFields as $dimension => $packageField){
-                $value = trim($row[strtolower($packageField)]);
+                $packageKey = strtolower($packageField);
+                $value = trim($row[$packageKey]);
+                $packageLog[] = 'Value of ['.$packageIndex.']['.$packageKey.'] is ['.$value.']';
                 if(!$value){
                     continue 2;
                 }
 
                 $packageValues['{'.$dimension.'}'] = $value;
             }
+            $packageLog[] = 'Result is '.json_encode($packageValues);
             $packageData[] = str_replace(array_keys($packageValues), array_values($packageValues), $packageDataFormat);
+            $packageIndex++;
         }
 
+        $packageLog[] = 'Result is '.json_encode($row);
+
+        Log::addEntry('PACKAGING: '.implode("\n", $packageLog));
         Log::addEntry($row['psku'].' has '.count($packageData).' packages');
         Log::addEntry($row['psku'].' headings '.implode('|', array_keys($row)));
 
