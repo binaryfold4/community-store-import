@@ -200,7 +200,7 @@ class Import extends DashboardPageController
             'Fabric Grade' => 'Fabric Grade',
             'Finish' => 'attr_product_finish',
             'RRP' => 'pPrice',
-            'LeadTime (Days)' => 'attr_lead_time_days',
+            'LeadTime (Weeks)' => 'lead_time_weeks',
             'Product Sku' => 'pSKU',
             'Product On Winman?' => 'Product On Winman?',
             'Scatter Prefix if Applicable' =>  'attr_product_scatter_sku_prefix',

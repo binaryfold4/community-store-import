@@ -270,19 +270,21 @@ class Worker
         Log::addEntry($row['psku'].' headings '.implode('|', array_keys($row)));
 
         $row['ppackagedata'] = implode("\n", $packageData);
+        $row['attr_lead_time_days'] = is_numeric($row['lead_time_weeks']) ? $row['lead_time_weeks']*7 : '0';
 
         return $row;
     }
 
     protected function syncProduct($row){
+
+        $row = $this->transformRow($row);
+
         // Get attribute headings
         foreach (array_keys($row) as $heading) {
             if (preg_match('/^attr_/', $heading)) {
                 $this->attributes[] = $heading;
             }
         }
-
-        $row = $this->transformRow($row);
 
         $start = microtime(true);
         $p = Product::getBySKU($row['psku']);
