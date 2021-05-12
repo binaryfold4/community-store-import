@@ -270,7 +270,7 @@ class Worker
         Log::addEntry($row['psku'].' headings '.implode('|', array_keys($row)));
 
         $row['ppackagedata'] = implode("\n", $packageData);
-        $row['attr_lead_time_days'] = $row['lead_time_weeks']*7;
+        $row['attr_lead_time_days'] = is_numeric($row['lead_time_weeks']) ? $row['lead_time_weeks']*7 : '0';
 
         return $row;
     }
