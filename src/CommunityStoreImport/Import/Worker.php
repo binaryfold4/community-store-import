@@ -265,9 +265,9 @@ class Worker
 
         $packageLog[] = 'Result is '.json_encode($row);
 
-        Log::addEntry('PACKAGING: '.implode("\n", $packageLog));
-        Log::addEntry($row['psku'].' has '.count($packageData).' packages');
-        Log::addEntry($row['psku'].' headings '.implode('|', array_keys($row)));
+//        Log::addEntry('PACKAGING: '.implode("\n", $packageLog));
+//        Log::addEntry($row['psku'].' has '.count($packageData).' packages');
+//        Log::addEntry($row['psku'].' headings '.implode('|', array_keys($row)));
 
         $row['ppackagedata'] = implode("\n", $packageData);
         $row['attr_lead_time_days'] = is_numeric($row['lead_time_weeks']) ? $row['lead_time_weeks']*7 : '0';
@@ -402,7 +402,7 @@ class Worker
         }
         $start = microtime(true);
         $this->em->flush();
-        Log::addEntry((microtime(true)-$start).' : createUpdate:flush');
+//        Log::addEntry((microtime(true)-$start).' : createUpdate:flush');
 
     }
 
